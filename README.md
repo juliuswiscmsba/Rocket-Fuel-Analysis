@@ -2,7 +2,9 @@
 
 ### [R Markdown Html Website](https://juliuswiscmsba.github.io/RocketFuel-Analysis/)
 
-After reading the case "Rocket fuel" from Harvard Business School case pack. Analyze the effective of online advertising.
+After reading the case "Rocket fuel" from Harvard Business School case pack. 
+
+Analyze the effective of online advertising.
 
 Result:
 
