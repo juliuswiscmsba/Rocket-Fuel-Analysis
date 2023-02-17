@@ -1,0 +1,208 @@
+---
+title: "RocketFuel"
+author: "Ming-Tsung"
+date: "10/29/2021"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+rm(list = ls()) # Clear the workspace
+```
+
+```{r}
+library(readxl)
+library(knitr)
+library(dplyr)
+library(ggplot2)
+library(dplyr)
+
+casedata <- read.csv("rocketfuel_deciles.csv")
+```
+
+```{r}
+summary(casedata)
+```
+
+```{r}
+#Summarize the variables in the data
+library(psych)
+psych::describe(casedata)
+```
+There are seven variables in the data. The standard deviation, skew, and Kurtosis are large in the "tot_impr" variable.
+```{r}
+#Create a table to show the numbers and shares of individuals who were in the treatment vs. control group.
+attach(casedata) 
+
+tb_test_full <- matrix(NA, nrow = 2, ncol = 2) 
+tb_test_full[1,] <- format(table(test), digits = 0) 
+tb_test_full[2,] <- format(prop.table(table(test)),digits = 3) 
+
+rownames(tb_test_full) <- c("Frequency", "Proportion" ) 
+colnames(tb_test_full) <- c("Control",  "Test")  
+
+kable(tb_test_full) 
+
+detach(casedata)
+```
+The proportion of test group is much larger than the proportion of control group, meaning not balanced.
+
+```{r}
+#Check for balance in the variables that should not be affected by treatment across treatment and control.
+attach(casedata)
+
+summary = casedata %>%  
+  mutate(test = as.factor(test)) %>%       
+  group_by(test) %>%      
+  summarise(n = length(user_id),
+            mean.converted = round(mean(converted),5),
+            mean.totimpr = round(mean(tot_impr),5),         
+            mean.modeimprday = round(mean(mode_impr_day),5),
+            mean.modeimprhour = round(mean(mode_impr_hour),5),
+
+            std.converted = round(sd(converted),5),
+            std.totimpr = round(sd(tot_impr),5),  
+            std.modeimprday = round(sd(mode_impr_day),5),
+            std.modeimprhour = round(sd(mode_impr_hour),5),
+            
+            error.converted = round(sd(converted)/sqrt(n),5),
+            error.totimpr = round(sd(tot_impr)/sqrt(n),5),  
+            error.modeimprday = round(sd(mode_impr_day)/sqrt(n),5),
+            error.modeimprhour = round(sd(mode_impr_hour)/sqrt(n),5),
+            
+            LCI.converted = round(mean.converted - 1.96*error.converted,5),
+            LCI.totimpr = round(mean.totimpr - 1.96*error.totimpr,5), 
+            LCI.modeimprday = round(mean.modeimprday - 1.96*error.modeimprday,5),
+            LCI.modeimprhour = round(mean.modeimprhour - 1.96*error.modeimprhour,5), 
+
+            UCI.converted = round(mean.converted + 1.96*error.converted,5),
+            UCI.totimpr = round(mean.totimpr + 1.96*error.totimpr,5), 
+            UCI.modeimprday = round(mean.modeimprday + 1.96*error.modeimprday,5),
+            UCI.modeimprhour = round(mean.modeimprhour + 1.96*error.modeimprhour,5))
+kable(summary[1:2,1:10]) 
+
+detach(casedata)
+```
+
+```{r}
+#Visualize
+attach(casedata)
+par(mfrow=c(2,4)) 
+
+hist(converted[test==0], main = paste("converted"), xlab = "Control")
+hist(tot_impr[test==0], main = paste("total impr"), xlab = "Control") 
+hist(mode_impr_day[test==0], main = paste("mode impr day"), xlab = "Control")
+hist(mode_impr_hour[test==0], main = paste("mode impr hour"), xlab = "Control")
+
+hist(converted[test==1], main = paste("converted"), xlab = "Test")
+hist(tot_impr[test==1], main = paste("total impr"), xlab = "Test") 
+hist(mode_impr_day[test==1], main = paste("mode impr day"), xlab = "Test") 
+hist(mode_impr_hour[test==1], main = paste("mode impr hour"), xlab = "Test")
+
+detach(casedata)
+```
+
+```{r}
+#Plot the means and confidence intervals of the main outcome “converted” by control and treatment.
+attach(casedata)
+
+summary %>%
+  ggplot(aes(x=test)) +
+  geom_point(aes(y = mean.converted), size = 3) +
+  scale_shape_manual(values=c(15, 16)) +
+  labs(
+    title = "Average Converted by Test",
+    caption = "Averages with 95% confidence intervals on the average"
+  )+
+  ylab("Converted") + 
+  scale_x_discrete(labels=c("0" = "Control", "1" = "Test")) +
+  xlab("")+ 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),axis.line = element_line(colour = "black"), 
+        axis.text.x= element_text(size = 10), legend.position=c(.5,.5),
+        plot.title=element_text(hjust=.5))+
+  geom_errorbar(aes(ymin = LCI.converted,
+                    ymax = UCI.converted), width = .15)+
+  scale_color_manual(values=c("darkgrey","black"))
+detach(casedata)
+```
+The average, UCI, and LCI of the control group are all smaller than the LCI of the test group, indicating that the test significantly increases "converted". (Make sense!) 
+
+```{r}
+#Calculate and report your estimate of the Average Treatment Effect (ATE) of the ads for treatment relative to control, the associated standard error, and provide a 95% confidence interval on the Average Treatment Effects.
+ATE <-matrix(NA, nrow = 1, ncol = 4) 
+colnames(ATE) <- c("Control Mean", "Test ATE", "LCI Test", "UCI Test") 
+rownames(ATE) <- c("Converted") 
+
+mean.control <- t(summary[1,3])
+mean.test <- t(summary[2,3])
+ATE[,1] <- mean.control
+ATE[,2] <- effect.test <- mean.test-mean.control  
+
+
+sd.control <- t(summary[1,11])
+sd.test <- t(summary[2,11])
+
+error.test <- sqrt(sd.control^2+sd.test^2)
+
+ATE[,3]<-LCI.test <- round(effect.test -1.96*error.test,4)
+ATE[,4]<-UCI.test <- round(effect.test +1.96*error.test,4)
+kable(ATE)
+```
+```{r}
+#Calculate the ATE again using the regression approach
+library("lmtest")
+library("sandwich")
+
+fit.converted <- lm(converted~test, data = casedata)  
+
+coeftest(fit.converted , vcov = vcovHC(fit.converted, type = "HC3"))  
+
+coefci(fit.converted, vcov = vcovHC(fit.converted)) 
+```
+
+Compare with the previous result, we can notice that there is no great difference between the regression approach and pure calculation. (Most of the differences are from rounding up)
+
+```{r}
+summary2 = casedata %>%  
+  mutate(test = as.factor(test)) %>%  
+  mutate(tot_impr_decile = as.factor(tot_impr_decile)) %>% 
+  group_by(test,tot_impr_decile) %>%        
+  summarise(n = length(user_id),            
+            m.converted = mean(converted),         
+            e.converted = sd(converted)/sqrt(n),
+            Lci.converted = m.converted - 1.96*e.converted,    
+            Uci.converted = m.converted + 1.96*e.converted,)
+           
+```
+
+```{r}
+#Create a summary table showing the sample size, the mean and the standard deviation of variables in the data set for both treatment and control group over the 10 deciles of total impressions.
+kable(summary2)
+```
+
+Most of the Deciles do not have a great difference between the control group and the testing group. Only Decile 9 and 10 have great differences.
+
+```{r}
+#Create a graph that shows the mean and 95% CI on “converted” separately for treatment and control plotted over the 10 deciles of total impressions.
+summary2 %>% 
+  ggplot(aes(tot_impr_decile)) + 
+  geom_point(aes(y = m.converted, shape = test, color = test), size = 3) +  
+  geom_errorbar(aes(ymin = Lci.converted,
+                    ymax = Uci.converted, color=test), width = .15)+  
+  ggtitle("Average Converteds by Test and tot_impr_decile") +  
+  ylab("average Converted") + xlab("tot_impr_decile") + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),axis.line = element_line(colour = "black"), 
+        axis.text.x= element_text(size = 10),
+        plot.title=element_text(hjust=.5) ) +
+  scale_shape_discrete(name = "Test group", labels = c("Control", "Test"))+ 
+  scale_color_discrete(name = "Test group", labels = c("Control", "Test"))
+```
+
+The graph shows that only the testing group Decile 9 and 10  have significantly increased "Converted", meaning that for the users in Decile 9 and 10, the real ad can affect them to buy the handbag.
